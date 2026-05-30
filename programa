@@ -1,0 +1,271 @@
+function GUI_FiltrosEspaciales
+    % Limpieza inicial
+    clc; close all;
+    % =====================================================================
+    % 1. VENTANA DE PRESENTACIÓN (PROFESIONAL)
+    % =====================================================================
+    figIntro = figure('Name','Proyecto: Procesamiento de Señales',...
+        'NumberTitle','off','MenuBar','none','ToolBar','none',...
+        'Position',[500 300 500 350],'Color',[1 1 1],'Resize','off');
+        
+    uicontrol(figIntro,'Style','text','String','SISTEMAS Y SEÑALES',...
+        'FontSize',18,'FontWeight','bold','ForegroundColor',[0.1 0.3 0.6],...
+        'Position',[50 270 400 40],'BackgroundColor',[1 1 1]);
+    
+    uicontrol(figIntro,'Style','text','String','Motor Universal de Filtrado Espacial LSI',...
+        'FontSize',11,'Position',[50 240 400 25],'BackgroundColor',[1 1 1]);
+        
+    uicontrol(figIntro,'Style','text','Position',[100 230 300 2],...
+        'BackgroundColor',[0.8 0.8 0.8]);
+        
+    uicontrol(figIntro,'Style','text','String','Equipo de Trabajo:',...
+        'FontSize',11,'FontWeight','bold','Position',[50 180 400 20],...
+        'BackgroundColor',[1 1 1],'HorizontalAlignment','center');
+        
+    integrantes = {'Sebastian Avila'; 'Sebastian Gonzalez'; 'Jean Bonete'};
+    uicontrol(figIntro,'Style','text','String',integrantes,...
+        'FontSize',11,'Position',[50 110 400 65],'BackgroundColor',[1 1 1],...
+        'HorizontalAlignment','center');
+        
+    uicontrol(figIntro,'Style','pushbutton','String','ENTRAR A LA APLICACIÓN',...
+        'FontSize',10,'FontWeight','bold','ForegroundColor',[1 1 1],...
+        'BackgroundColor',[0.1 0.5 0.2],'Position',[150 40 200 45],...
+        'Callback',@(~,~) startApp(figIntro));
+end
+
+% =========================================================================
+% 2. APLICACIÓN PRINCIPAL
+% =========================================================================
+
+function startApp(figIntro)
+    if ishandle(figIntro), delete(figIntro); end
+    
+    fig = figure('Name','Laboratorio de Sistemas LSI - Filtros 2D',...
+                 'NumberTitle','off','MenuBar','none','ToolBar','none',...
+                 'Position',[200 100 1100 650],'Color',[1 1 1],'Resize','off');
+                 
+    data.img = [];
+    data.result = [];
+    data.edges = [];
+    
+    % --- PANEL DE CABECERA ---
+    uipanel(fig,'Position',[0 0.9 1 0.1],'BackgroundColor',[0.95 0.95 0.95],'BorderType','none');
+    uicontrol(fig,'Style','text','String','MOTOR UNIVERSAL DE FILTRADO ESPACIAL',...
+        'FontSize',14,'FontWeight','bold','Units','normalized',...
+        'Position',[0.2 0.92 0.6 0.05],'BackgroundColor',[0.95 0.95 0.95]);
+        
+    % --- PANEL LATERAL DE CONTROL ---
+    pCtrl = uipanel(fig,'Title','Controles del Sistema','FontSize',10,'FontWeight','bold',...
+        'Position',[0.02 0.05 0.22 0.82],'BackgroundColor',[1 1 1]);
+        
+    uicontrol(pCtrl,'Style','pushbutton','String','1. Cargar Imagen',...
+        'Units','normalized','Position',[0.1 0.88 0.8 0.06],...
+        'FontSize',10,'BackgroundColor',[0.9 0.9 0.9],'Callback',@loadImage);
+        
+    % NUEVO: Lista desplegable de Filtros
+    uicontrol(pCtrl,'Style','text','String','Seleccionar Filtro (Kernel):',...
+        'Units','normalized','Position',[0.1 0.80 0.8 0.04],...
+        'BackgroundColor',[1 1 1],'HorizontalAlignment','left','FontWeight','bold');
+        
+    opcionesFiltro = {'1. Realce (Sharpening)','2. Relieve 3D (Emboss)','3. Extracción de Bordes'};
+    data.popup = uicontrol(pCtrl,'Style','popupmenu','String',opcionesFiltro,...
+        'Units','normalized','Position',[0.1 0.74 0.8 0.05],'BackgroundColor',[1 1 1],...
+        'Callback',@updateKernelText);
+        
+    uicontrol(pCtrl,'Style','text','String','Ganancia del Sistema (\alpha):',...
+        'Units','normalized','Position',[0.1 0.66 0.8 0.04],...
+        'BackgroundColor',[1 1 1],'HorizontalAlignment','left');
+    
+    data.slider = uicontrol(pCtrl,'Style','slider','Min',0,'Max',3,'Value',1,...
+        'Units','normalized','Position',[0.1 0.62 0.8 0.04],'BackgroundColor',[1 1 1]);
+        
+    uicontrol(pCtrl,'Style','pushbutton','String','2. Procesar Señal',...
+        'Units','normalized','Position',[0.1 0.52 0.8 0.08],...
+        'FontSize',10,'FontWeight','bold','ForegroundColor',[1 1 1],...
+        'BackgroundColor',[0.1 0.3 0.6],'Callback',@applyFilter);
+        
+    uicontrol(pCtrl,'Style','pushbutton','String','3. Ver Matriz de Convolución',...
+        'Units','normalized','Position',[0.1 0.42 0.8 0.07],...
+        'FontSize',9,'BackgroundColor',[1 0.8 0.4],'Callback',@showEdges);
+
+    uicontrol(pCtrl,'Style','pushbutton','String','4. Guardar Resultado',...
+        'Units','normalized','Position',[0.1 0.33 0.8 0.07],...
+        'FontSize',9,'BackgroundColor',[0.8 0.9 0.8],'Callback',@downloadImage);
+        
+    % Info Dinámica del Kernel
+    uicontrol(pCtrl,'Style','text','String','Respuesta al Impulso h[m,n]:',...
+        'Units','normalized','Position',[0.1 0.22 0.8 0.05],...
+        'BackgroundColor',[1 1 1],'FontWeight','bold');
+    
+    data.kernelTxt = uicontrol(pCtrl,'Style','text','String',{'[  0  -1   0 ]';'[ -1   4  -1 ]';'[  0  -1   0 ]'},...
+        'Units','normalized','Position',[0.1 0.08 0.8 0.13],...
+        'BackgroundColor',[0.96 0.96 0.96],'FontName','Monospaced','FontSize',11);
+        
+    % --- ÁREAS DE VISUALIZACIÓN ---
+    ax1Panel = uipanel(fig,'Title','Señal de Entrada x[m,n]','Position',[0.26 0.15 0.35 0.72],'BackgroundColor',[1 1 1]);
+    data.ax1 = axes('Parent',ax1Panel,'Position',[0.05 0.05 0.9 0.9]);
+    axis off; title('Original');
+    
+    ax2Panel = uipanel(fig,'Title','Señal de Salida y[m,n]','Position',[0.63 0.15 0.35 0.72],'BackgroundColor',[1 1 1]);
+    data.ax2 = axes('Parent',ax2Panel,'Position',[0.05 0.05 0.9 0.9]);
+    axis off; title('Procesada');
+    
+    guidata(fig,data);
+end
+
+% =========================================================================
+% FUNCIONES DE LOGICA DEL SISTEMA
+% =========================================================================
+
+function updateKernelText(btn, ~)
+    fig = ancestor(btn,'figure');
+    data = guidata(fig);
+    modo = get(data.popup, 'Value');
+    
+    % Actualiza el texto en pantalla para que el usuario vea la matriz activa
+    switch modo
+        case 1
+            str = {'[  0  -1   0 ]';'[ -1   4  -1 ]';'[  0  -1   0 ]'};
+        case 2
+            str = {'[ -2  -1   0 ]';'[ -1   1   1 ]';'[  0   1   2 ]'};
+        case 3
+            str = {'[ -1  -1  -1 ]';'[ -1   8  -1 ]';'[ -1  -1  -1 ]'};
+    end
+    set(data.kernelTxt, 'String', str);
+end
+
+function loadImage(btn, ~)
+    fig = ancestor(btn,'figure');
+    data = guidata(fig);
+    [file,path] = uigetfile({'*.jpg;*.png;*.bmp;*.tif','Archivos de Imagen'});
+    if isequal(file,0), return; end
+    
+    img = imread(fullfile(path,file));
+    data.img = img;
+    data.result = []; 
+    data.edges = [];
+    
+    axes(data.ax1); imshow(img); title('Imagen Original');
+    axes(data.ax2); cla; axis off; title('Procesada');
+    guidata(fig,data);
+end
+
+function applyFilter(btn, ~)
+    fig = ancestor(btn,'figure');
+    data = guidata(fig);
+    
+    if isempty(data.img)
+        errordlg('Error: Debe cargar una señal de entrada primero.', 'Falta Señal');
+        return;
+    end
+    
+    set(btn, 'Enable', 'off', 'String', 'Procesando...');
+    drawnow;
+    
+    alpha = get(data.slider, 'Value');
+    modo = get(data.popup, 'Value');
+    img_dbl = double(data.img);
+    
+    % Selección de la matriz (Kernel) según la UI
+    switch modo
+        case 1 % Sharpening Clásico
+            h = [0 -1 0; -1 4 -1; 0 -1 0];
+            titulo = ['Realce (\alpha = ', num2str(alpha,2), ')'];
+        case 2 % Relieve 3D
+            h = [-2 -1 0; -1 1 1; 0 1 2];
+            titulo = ['Relieve 3D (\alpha = ', num2str(alpha,2), ')'];
+        case 3 % Bordes (Laplaciano 8 vecinos)
+            h = [-1 -1 -1; -1 8 -1; -1 -1 -1];
+            titulo = ['Bordes Puros (\alpha = ', num2str(alpha,2), ')'];
+    end
+    
+    % Convolución Manual Universal
+    [res, edges_raw] = convolucionUniversal(img_dbl, h, alpha, modo);
+    
+    data.edges = edges_raw;
+    
+    % Saturación segura de 8-bits
+    res(res < 0) = 0;
+    res(res > 255) = 255;
+    data.result = uint8(res);
+    
+    axes(data.ax2); imshow(data.result); title(titulo);
+    
+    set(btn, 'Enable', 'on', 'String', '2. Procesar Señal');
+    guidata(fig,data);
+end
+
+function showEdges(btn, ~)
+    fig = ancestor(btn,'figure');
+    data = guidata(fig);
+    
+    if isempty(data.edges)
+        errordlg('Primero debe procesar la señal.', 'Error');
+        return;
+    end
+    
+    figure('Name', 'Visor de Matriz Resultante', 'NumberTitle', 'off');
+    if size(data.edges, 3) == 3
+        bordes_visuales = sum(data.edges, 3);
+    else
+        bordes_visuales = data.edges;
+    end
+    
+    imshow(bordes_visuales, []);
+    title('Matriz Pura extraída por el Kernel');
+    colormap jet; colorbar; 
+end
+
+function downloadImage(btn, ~)
+    fig = ancestor(btn,'figure');
+    data = guidata(fig);
+    
+    if isempty(data.result)
+        errordlg('No hay señal de salida para guardar.', 'Error');
+        return;
+    end
+    
+    [archivo, ruta] = uiputfile('*.png', 'Guardar señal exportada');
+    if archivo ~= 0
+        imwrite(data.result, fullfile(ruta, archivo));
+        msgbox('¡Señal exportada con éxito!', 'Guardado');
+    end
+end
+
+% =========================================================================
+% MOTOR MATEMÁTICO UNIVERSAL DE CONVOLUCIÓN
+% =========================================================================
+function [out, edges_out] = convolucionUniversal(img, kernel, alpha, modo)
+    [rows, cols, channels] = size(img);
+    out = zeros(rows, cols, channels);
+    edges_out = zeros(rows, cols, channels);
+    
+    % Zero-Padding para Sistema Estable
+    img_pad = zeros(rows+2, cols+2, channels);
+    img_pad(2:end-1, 2:end-1, :) = img;
+    
+    % Lazo de convolución LSI
+    for ch = 1:channels
+        for i = 2:rows+1
+            for j = 2:cols+1
+                ventana = img_pad(i-1:i+1, j-1:j+1, ch);
+                
+                % Producto escalar 2D
+                conv_val = sum(sum(ventana .* kernel));
+                edges_out(i-1, j-1, ch) = conv_val; 
+                
+                % Ecuación de Salida dependiente del modo
+                if modo == 1
+                    % Sharpening: Salida = Original + (Ganancia * Bordes)
+                    out(i-1, j-1, ch) = img_pad(i,j,ch) + alpha * conv_val;
+                elseif modo == 2
+                    % Relieve 3D: Solo bordes + Desplazamiento DC (gris base 128)
+                    out(i-1, j-1, ch) = (alpha * conv_val) + 128;
+                elseif modo == 3
+                    % Bordes Puros: Solo el kernel actuando
+                    out(i-1, j-1, ch) = alpha * conv_val;
+                end
+            end
+        end
+    end
+end
